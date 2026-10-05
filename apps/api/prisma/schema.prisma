@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TicketType {
+  QUALITY
+  RECOVERY
+  LABOUR
+  PRODUCTIVITY
+  PLANNING
+  SAFETY
+  OTHERS
+}
+
+enum TicketStatus {
+  PENDING
+  IN_PROGRESS
+  ON_HOLD
+  DISPUTE
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// What a permission applies to. ALL = every row, SITES = rows in the user's sites,
+// OWN = rows the user created. Ignored for subjects that are not tickets.
+enum PermissionScope {
+  ALL
+  SITES
+  OWN
+}
+
+enum LogAction {
+  CREATED
+  ACKNOWLEDGED
+  STATUS_CHANGED
+  FOLLOW_UP
+  COMMENT
+  DETAILS_UPDATED
+  ATTACHMENT_ADDED
+}
+
+model Role {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  description String?
+  // System roles (the four defaults) cannot be deleted or renamed.
+  isSystem    Boolean      @default(false)
+  users       User[]
+  permissions Permission[]
+}
+
+model Permission {
+  id      String          @id @default(uuid())
+  roleId  String
+  role    Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  action  String
+  // "all" is allowed and means every subject (used with action "manage" for Admin).
+  subject String
+  scope   PermissionScope @default(ALL)
+
+  @@unique([roleId, action, subject])
+  @@index([roleId])
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  roleId       String
+  role         Role     @relation(fields: [roleId], references: [id])
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sites         UserSite[]
+  raisedTickets Ticket[]       @relation("RaisedBy")
+  acknowledged  Ticket[]       @relation("AcknowledgedBy")
+  logs          TicketLog[]
+  attachments   Attachment[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Site {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  name      String
+  location  String?
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  users     UserSite[]
+  tickets   Ticket[]
+}
+
+model UserSite {
+  userId String
+  siteId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, siteId])
+  @@index([siteId])
+}
+
+model Ticket {
+  id               String       @id @default(uuid())
+  refNo            String       @unique
+  title            String
+  description      String
+  type             TicketType
+  priority         Priority     @default(MEDIUM)
+  status           TicketStatus @default(PENDING)
+  siteId           String
+  site             Site         @relation(fields: [siteId], references: [id])
+  raisedById       String
+  raisedBy         User         @relation("RaisedBy", fields: [raisedById], references: [id])
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  acknowledgedBy   User?        @relation("AcknowledgedBy", fields: [acknowledgedById], references: [id])
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  completedAt      DateTime?
+
+  logs        TicketLog[]
+  attachments Attachment[]
+
+  @@index([siteId, status])
+  @@index([raisedById])
+  @@index([status])
+}
+
+// One timeline per ticket. Rows with internal = true are only visible to roles that hold the
+// "viewInternal" permission, so the client never sees them.
+model TicketLog {
+  id         String        @id @default(uuid())
+  ticketId   String
+  ticket     Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId    String
+  actor      User          @relation(fields: [actorId], references: [id])
+  action     LogAction
+  fromStatus TicketStatus?
+  toStatus   TicketStatus?
+  note       String?
+  internal   Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
+}
+
+model Attachment {
+  id           String   @id @default(uuid())
+  ticketId     String
+  ticket       Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploadedById String
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  storedName   String   @unique
+  originalName String
+  mimeType     String
+  size         Int
+  internal     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  @@index([ticketId])
+}
+
+// Per-year running number used to build references such as TKT-2026-0001.
+model TicketCounter {
+  year Int @id
+  last Int @default(0)
+}

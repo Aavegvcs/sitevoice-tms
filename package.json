@@ -1,0 +1,16 @@
+{
+  "name": "complaint-raise-system",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run start:dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "overrides": {
+    "prisma": "6.19.3"
+  }
+}
