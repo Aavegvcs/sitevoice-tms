@@ -92,7 +92,7 @@ export class TicketsService {
     const [logs, attachments] = await Promise.all([
       this.prisma.ticketLog.findMany({
         where: { ticketId: id, ...visibility },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: 'desc' },
         select: {
           id: true,
           action: true,

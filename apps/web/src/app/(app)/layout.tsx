@@ -50,7 +50,7 @@ function Shell({ children }: { children: ReactNode }) {
         </button>
       </header>
 
-      <aside className={`${open ? 'block' : 'hidden'} w-full shrink-0 border-r border-slate-200 bg-white md:flex md:min-h-screen md:w-60 md:flex-col`}>
+      <aside className={`${open ? 'block' : 'hidden'} w-full shrink-0 border-r border-slate-200 bg-white md:sticky md:top-0 md:flex md:h-screen md:w-60 md:flex-col md:self-start md:overflow-y-auto`}>
         <div className="hidden items-center gap-2 px-5 py-5 md:flex">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">S</div>
           <span className="text-lg font-semibold text-slate-900">SiteVoice</span>
