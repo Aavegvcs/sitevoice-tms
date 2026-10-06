@@ -1,0 +1,13 @@
+# One origin for both apps: the auth cookies are set by the API and read by the web proxy,
+# so they must share a host. Caddy fetches and renews the TLS certificate for {$DOMAIN}.
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
