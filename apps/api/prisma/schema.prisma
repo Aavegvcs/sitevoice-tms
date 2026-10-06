@@ -21,7 +21,8 @@ enum TicketStatus {
   PENDING
   IN_PROGRESS
   ON_HOLD
-  DISPUTE
+  // Staff have finished the work; waiting for the client who raised it to confirm.
+  AWAITING_CONFIRMATION
   COMPLETED
 }
 

@@ -10,7 +10,7 @@ import { LOG_LABEL, PRIORITIES, PRIORITY_META, STATUSES, STATUS_META, TYPES, TYP
 import { fmtDateTime, fmtSize } from '@/lib/format';
 import type { Attachment, Priority, TicketDetail, TicketLog, TicketStatus, TicketType } from '@/lib/types';
 
-const NEEDS_REASON: TicketStatus[] = ['ON_HOLD', 'DISPUTE'];
+const NEEDS_REASON: TicketStatus[] = ['ON_HOLD'];
 
 /** Runs a ticket action, then refreshes the ticket, lists and dashboard. */
 function useTicketAction<TVars>(id: string, fn: (v: TVars) => Promise<unknown>, onDone?: () => void) {
@@ -21,6 +21,7 @@ function useTicketAction<TVars>(id: string, fn: (v: TVars) => Promise<unknown>, 
       qc.invalidateQueries({ queryKey: ['ticket', id] });
       qc.invalidateQueries({ queryKey: ['tickets'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['awaiting-confirmation'] });
       onDone?.();
     },
   });
@@ -94,6 +95,8 @@ function Attachments({ ticketId, items }: { ticketId: string; items: Attachment[
 function describe(l: TicketLog) {
   switch (l.action) {
     case 'STATUS_CHANGED':
+      if (l.toStatus === 'AWAITING_CONFIRMATION') return 'Marked the work as done and asked the client to confirm';
+      if (l.fromStatus === 'AWAITING_CONFIRMATION' && l.toStatus === 'COMPLETED') return 'Confirmed the ticket is completed';
       return `Status changed${l.fromStatus ? ` from ${STATUS_META[l.fromStatus].label}` : ''} to ${l.toStatus ? STATUS_META[l.toStatus].label : ''}`;
     case 'CREATED':
       return 'Raised the ticket';
@@ -168,16 +171,19 @@ function StatusChanger({ ticket }: { ticket: TicketDetail }) {
     },
   );
   return (
-    <ActionBox title="Change status">
+    <ActionBox title="Change status" hint="Only the client can close a ticket as Completed.">
       {m.error && <Alert>{errorMessage(m.error)}</Alert>}
       <Select aria-label="New status" value={status} onChange={(e) => setStatus(e.target.value as TicketStatus)}>
         <option value="">Select new status</option>
-        {STATUSES.filter((s) => s !== ticket.status).map((s) => (
+        {STATUSES.filter((s) => s !== ticket.status && s !== 'COMPLETED').map((s) => (
           <option key={s} value={s}>
-            {STATUS_META[s].label}
+            {s === 'AWAITING_CONFIRMATION' ? 'Work done: ask client to confirm' : STATUS_META[s].label}
           </option>
         ))}
       </Select>
+      {status === 'AWAITING_CONFIRMATION' && (
+        <p className="text-xs text-slate-500">The ticket is completed only after the client who raised it confirms.</p>
+      )}
       {status && (
         <Textarea
           rows={2}
@@ -191,6 +197,84 @@ function StatusChanger({ ticket }: { ticket: TicketDetail }) {
         Update status
       </Button>
     </ActionBox>
+  );
+}
+
+/** Shown on a ticket that staff have marked as done: the client confirms, or says it is not resolved. */
+function ConfirmationPanel({ ticket }: { ticket: TicketDetail }) {
+  const [mode, setMode] = useState<'confirm' | 'reject' | null>(null);
+  const [text, setText] = useState('');
+  const request = ticket.logs.find((l) => l.action === 'STATUS_CHANGED' && l.toStatus === 'AWAITING_CONFIRMATION');
+  const close = () => {
+    setMode(null);
+    setText('');
+  };
+  const m = useTicketAction(
+    ticket.id,
+    () =>
+      mode === 'confirm'
+        ? apiFetch(`/tickets/${ticket.id}/complete`, { method: 'POST', body: { note: text.trim() || undefined } })
+        : apiFetch(`/tickets/${ticket.id}/reject-completion`, { method: 'POST', body: { reason: text.trim() } }),
+    close,
+  );
+
+  if (!ticket.allowed.confirmCompletion) {
+    return (
+      <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 px-5 py-4 text-sm text-violet-900">
+        <p className="font-semibold">Waiting for {ticket.raisedBy.name} to confirm completion</p>
+        <p className="mt-0.5 text-violet-800">
+          {request ? `${request.actor.name} marked the work as done on ${fmtDateTime(request.createdAt)}. ` : ''}
+          The ticket closes once the client confirms, or returns to In Progress if they say it is not resolved.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="mb-5 rounded-lg border border-violet-200 bg-violet-50 p-5" aria-labelledby="confirm-title">
+      <h2 id="confirm-title" className="font-semibold text-violet-900">
+        Please confirm this ticket is completed
+      </h2>
+      <p className="mt-0.5 text-sm text-violet-800">
+        {request ? `${request.actor.name} marked the work as done on ${fmtDateTime(request.createdAt)}.` : 'The team has marked the work as done.'}{' '}
+        It will be closed only after you confirm.
+      </p>
+      {request?.note && <p className="mt-3 whitespace-pre-wrap rounded-md bg-white px-3 py-2 text-sm text-slate-700">{request.note}</p>}
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button onClick={() => setMode('confirm')}>Confirm completion</Button>
+        <Button variant="secondary" onClick={() => setMode('reject')}>
+          Not resolved
+        </Button>
+      </div>
+      {mode && (
+        <Modal title={mode === 'confirm' ? 'Confirm the ticket is completed?' : 'Work not resolved?'} onClose={close}>
+          <div className="space-y-4">
+            {m.error && <Alert>{errorMessage(m.error)}</Alert>}
+            <p className="text-sm text-slate-600">
+              {mode === 'confirm'
+                ? 'The ticket will be closed as Completed. This is recorded in the log.'
+                : 'The ticket goes back to In Progress and the team sees your reason.'}
+            </p>
+            <Field label={mode === 'confirm' ? 'Comment (optional)' : 'What is still not resolved? (required)'} htmlFor="confirm-text">
+              <Textarea id="confirm-text" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={close}>
+                Cancel
+              </Button>
+              <Button
+                variant={mode === 'confirm' ? 'primary' : 'danger'}
+                disabled={mode === 'reject' && text.trim().length < 3}
+                loading={m.isPending}
+                onClick={() => m.mutate(undefined)}
+              >
+                {mode === 'confirm' ? 'Yes, it is completed' : 'Send back to the team'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }
 
@@ -359,7 +443,7 @@ export default function TicketDetailPage() {
   }
 
   const a = t.allowed;
-  const hasActions = a.acknowledge || a.changeStatus || a.complete || a.followUp || a.comment || a.attach || a.update;
+  const hasActions = a.acknowledge || a.changeStatus || (a.complete && !a.confirmCompletion) || a.followUp || a.comment || a.attach || a.update;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -381,6 +465,8 @@ export default function TicketDetailPage() {
           <Progress ticket={t} />
         </div>
       </div>
+
+      {t.status === 'AWAITING_CONFIRMATION' && <ConfirmationPanel ticket={t} />}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
         <div className="min-w-0 space-y-5">
@@ -432,7 +518,7 @@ export default function TicketDetailPage() {
                   </Button>
                 </ActionBox>
               )}
-              {a.complete && <CompleteBox ticket={t} />}
+              {a.complete && !a.confirmCompletion && <CompleteBox ticket={t} />}
               {a.followUp && <MessageBox ticket={t} kind="followUp" />}
               {a.changeStatus && <StatusChanger ticket={t} />}
               {a.comment && <MessageBox ticket={t} kind="comment" />}
