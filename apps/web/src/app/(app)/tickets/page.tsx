@@ -8,7 +8,7 @@ import { Button, Card, EmptyState, PageHeader, Pagination, PriorityBadge, Select
 import { apiFetch, errorMessage } from '@/lib/api';
 import { Can, useAuth } from '@/lib/auth';
 import { PRIORITIES, PRIORITY_META, STATUSES, STATUS_META, TYPES, TYPE_LABEL } from '@/lib/constants';
-import { fmtDate } from '@/lib/format';
+import { fmtDate, fmtDateTime } from '@/lib/format';
 import type { Site, TicketList } from '@/lib/types';
 
 const PAGE_SIZE = 15;
@@ -116,7 +116,7 @@ function TicketsInner() {
         )}
         {data && data.items.length > 0 && (
           <div className={`overflow-x-auto ${isFetching ? 'opacity-60' : ''}`}>
-            <table className="w-full min-w-[820px] text-sm">
+            <table className="w-full min-w-[920px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-2.5 font-medium">Reference</th>
@@ -125,6 +125,7 @@ function TicketsInner() {
                   <th className="px-3 py-2.5 font-medium">Type</th>
                   <th className="px-3 py-2.5 font-medium">Priority</th>
                   <th className="px-3 py-2.5 font-medium">Status</th>
+                  <th className="px-3 py-2.5 font-medium">Acknowledged</th>
                   <th className="px-3 py-2.5 font-medium">Raised by</th>
                   <th className="px-3 py-2.5 font-medium">Updated</th>
                 </tr>
@@ -147,6 +148,17 @@ function TicketsInner() {
                     </td>
                     <td className="px-3 py-3">
                       <StatusBadge status={t.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-3">
+                      {t.acknowledgedAt ? (
+                        <span className="inline-flex items-center gap-1.5 text-green-700" title={`Acknowledged ${fmtDateTime(t.acknowledgedAt)}`}>
+                          <span aria-hidden>✓</span> Yes
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 text-slate-400">
+                          <span aria-hidden>–</span> No
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-3 text-slate-600">{t.raisedBy.name}</td>
                     <td className="whitespace-nowrap px-3 py-3 text-slate-500">{fmtDate(t.updatedAt)}</td>
