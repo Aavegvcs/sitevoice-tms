@@ -58,7 +58,9 @@ export class AuthController {
     const base = {
       httpOnly: true,
       sameSite: 'lax' as const,
-      secure: this.config.get('NODE_ENV') === 'production',
+      // Secure cookies are dropped by browsers over plain http, so a deployment without HTTPS
+      // must set COOKIE_SECURE=false. Defaults to secure in production.
+      secure: (this.config.get('COOKIE_SECURE') ?? String(this.config.get('NODE_ENV') === 'production')) === 'true',
     };
     // The cookie outlives the 15-minute JWT inside it so the web proxy can tell "has a session"
     // from "logged out"; an expired JWT gets a 401 and the client refreshes.
