@@ -33,6 +33,25 @@ Seeded users (all share the password in `SEED_PASSWORD`, default `Password@123`;
 Diagrams of the database relations, user flow, status lifecycle and request authorisation are in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
+## Deploy on an Ubuntu server
+
+Needs Docker Engine with the compose plugin (`docker compose version`).
+
+```bash
+git clone https://github.com/Aavegvcs/sitevoice-tms.git && cd sitevoice-tms
+cp .env.production.example .env.production
+nano .env.production        # set the server address, DB password, JWT secret, admin email and password
+sudo ufw allow 3000,4000/tcp
+docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+docker compose -f docker-compose.prod.yml --env-file .env.production --profile setup run --rm seed
+```
+
+The last command runs once. It creates the four roles and one Admin (`SEED_ADMIN_EMAIL`); sign in and
+create sites and users in the app. To update: `git pull`, then rerun the `up -d --build` line
+(migrations run on start). If you change `NEXT_PUBLIC_API_URL`, rebuild so the web image picks it up.
+Data lives in the `pgdata` and `uploads` Docker volumes. Back them up.
+Set `COOKIE_SECURE=true` once the site is served over HTTPS.
+
 ## How access works
 
 Permissions are rows in the database (`Permission`: action + subject + scope), edited by the Admin under
