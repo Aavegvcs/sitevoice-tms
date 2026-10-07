@@ -79,7 +79,9 @@ SEED_PASSWORD=Test@1234 npm run test:e2e
 
 ## Notes
 
-- Uploads are stored on local disk under `apps/api/uploads` (override with `UPLOAD_DIR`). Images are
+- Uploads are stored in AWS S3 when `S3_BUCKET` is set (`S3_REGION`, `S3_PREFIX`; credentials from the AWS
+  default chain, e.g. an EC2 instance role). Without it they go to local disk under `apps/api/uploads`
+  (development only). The bucket stays private: files are streamed through the API. Images are
   shown inline; every other file type downloads as an attachment.
 - Set a random `JWT_ACCESS_SECRET` (32+ characters) and `NODE_ENV=production` for any real deployment.
   Serve the web app and API over HTTPS so the session cookies are marked secure.

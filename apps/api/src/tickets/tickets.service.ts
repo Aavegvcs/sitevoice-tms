@@ -9,8 +9,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { Prisma, TicketStatus } from '@prisma/client';
-import { createReadStream, existsSync } from 'fs';
-import { extname, join } from 'path';
+import { extname } from 'path';
 import { AuthUser } from '../auth/auth.types';
 import { AppAbility } from '../casl/casl-ability.factory';
 import { PrismaService } from '../prisma/prisma.service';
@@ -24,7 +23,8 @@ import {
   RejectCompletionDto,
   UpdateTicketDto,
 } from './tickets.dto';
-import { INLINE_TYPES, UPLOAD_DIR, decodeName, removeFiles } from './uploads';
+import { AttachmentStorage } from './storage';
+import { INLINE_TYPES, decodeName } from './uploads';
 
 type UploadedFile = Express.Multer.File;
 
@@ -53,7 +53,10 @@ const NEEDS_REASON: TicketStatus[] = ['ON_HOLD'];
 
 @Injectable()
 export class TicketsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: AttachmentStorage,
+  ) {}
 
   // ---------------------------------------------------------------- reads
   async list(q: ListTicketsQuery, ability: AppAbility) {
@@ -142,12 +145,14 @@ export class TicketsService {
 
   // ---------------------------------------------------------------- writes
   async create(dto: CreateTicketDto, files: UploadedFile[], user: AuthUser, ability: AppAbility) {
+    let stored: string[] = [];
     try {
       if (!this.can(ability, 'create', { siteId: dto.siteId, raisedById: user.id })) {
         throw new ForbiddenException('You cannot raise a ticket for this site');
       }
       const site = await this.prisma.site.findUnique({ where: { id: dto.siteId } });
       if (!site || !site.isActive) throw new BadRequestException('Unknown or inactive site');
+      stored = await this.storeAll(files);
 
       return await this.prisma.$transaction(async (tx) => {
         const year = new Date().getFullYear();
@@ -171,12 +176,12 @@ export class TicketsService {
           data: { ticketId: ticket.id, actorId: user.id, action: 'CREATED', toStatus: 'PENDING' },
         });
         if (files.length) {
-          await tx.attachment.createMany({ data: files.map((f) => this.attachmentRow(f, ticket.id, user.id, false)) });
+          await tx.attachment.createMany({ data: files.map((f, i) => this.attachmentRow(f, stored[i], ticket.id, user.id, false)) });
         }
         return { id: ticket.id, refNo: ticket.refNo };
       });
     } catch (e) {
-      removeFiles(files);
+      await this.storage.remove(stored);
       throw e;
     }
   }
@@ -307,6 +312,7 @@ export class TicketsService {
   }
 
   async addAttachments(id: string, files: UploadedFile[], user: AuthUser, ability: AppAbility) {
+    let stored: string[] = [];
     try {
       const ticket = await this.loadVisible(id, ability);
       const canComment = this.can(ability, 'comment', ticket);
@@ -317,8 +323,9 @@ export class TicketsService {
 
       // Staff uploads are internal; a client's uploads are visible to everyone on the ticket.
       const internal = canComment;
+      stored = await this.storeAll(files);
       await this.prisma.$transaction([
-        this.prisma.attachment.createMany({ data: files.map((f) => this.attachmentRow(f, id, user.id, internal)) }),
+        this.prisma.attachment.createMany({ data: files.map((f, i) => this.attachmentRow(f, stored[i], id, user.id, internal)) }),
         this.prisma.ticketLog.create({
           data: {
             ticketId: id,
@@ -332,7 +339,7 @@ export class TicketsService {
       ]);
       return { id };
     } catch (e) {
-      removeFiles(files);
+      await this.storage.remove(stored);
       throw e;
     }
   }
@@ -343,13 +350,13 @@ export class TicketsService {
     if (!att || (att.internal && !this.can(ability, 'viewInternal', ticket))) {
       throw new NotFoundException('Attachment not found');
     }
-    const path = join(UPLOAD_DIR, att.storedName);
-    if (!existsSync(path)) throw new NotFoundException('File is no longer available');
+    const stream = await this.storage.get(att.storedName);
+    if (!stream) throw new NotFoundException('File is no longer available');
 
     const ext = extname(att.originalName).toLowerCase();
     const inlineType = INLINE_TYPES[ext];
     return {
-      file: new StreamableFile(createReadStream(path)),
+      file: new StreamableFile(stream),
       type: inlineType ?? 'application/octet-stream',
       disposition: `${inlineType ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(att.originalName)}`,
     };
@@ -378,6 +385,14 @@ export class TicketsService {
         data: { status: to, completedAt: to === 'COMPLETED' ? new Date() : null, updatedAt: new Date() },
       });
       if (res.count === 0) throw new ConflictException('The ticket was changed by someone else. Reload and retry');
+      // Moving a ticket out of Pending means someone has picked it up, so it counts as acknowledged.
+      if (ticket.status === 'PENDING') {
+        const ack = await tx.ticket.updateMany({
+          where: { id: ticket.id, acknowledgedAt: null },
+          data: { acknowledgedAt: new Date(), acknowledgedById: user.id },
+        });
+        if (ack.count) await tx.ticketLog.create({ data: { ticketId: ticket.id, actorId: user.id, action: 'ACKNOWLEDGED' } });
+      }
       await tx.ticketLog.create({
         data: {
           ticketId: ticket.id,
@@ -399,11 +414,23 @@ export class TicketsService {
     ]);
   }
 
-  private attachmentRow(f: UploadedFile, ticketId: string, uploadedById: string, internal: boolean) {
+  /** Uploads every file; if one fails the ones already stored are removed. */
+  private async storeAll(files: UploadedFile[]) {
+    const results = await Promise.allSettled(files.map((f) => this.storage.put(f)));
+    const names = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) {
+      await this.storage.remove(names);
+      throw failed.reason;
+    }
+    return names;
+  }
+
+  private attachmentRow(f: UploadedFile, storedName: string, ticketId: string, uploadedById: string, internal: boolean) {
     return {
       ticketId,
       uploadedById,
-      storedName: f.filename,
+      storedName,
       originalName: decodeName(f.originalname),
       mimeType: f.mimetype,
       size: f.size,
