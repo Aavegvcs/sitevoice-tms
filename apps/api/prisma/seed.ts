@@ -95,6 +95,20 @@ async function main() {
     });
   }
 
+  // Production bootstrap: only the roles above and one Admin; no demo sites, users or tickets.
+  // Everything else is then created by the Admin in the app.
+  if (process.env.SEED_MINIMAL === 'true') {
+    const email = (process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com').trim().toLowerCase();
+    const adminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'Admin' } });
+    await prisma.user.upsert({
+      where: { email },
+      update: {},
+      create: { name: 'Administrator', email, passwordHash: await bcrypt.hash(SEED_PASSWORD, 10), roleId: adminRole.id },
+    });
+    console.log(`Seed complete (minimal): roles and Admin user ${email}`);
+    return;
+  }
+
   const siteIds: Record<string, string> = {};
   for (const s of SITES) {
     const site = await prisma.site.upsert({ where: { code: s.code }, update: {}, create: s });

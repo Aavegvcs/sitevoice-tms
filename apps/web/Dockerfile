@@ -8,10 +8,12 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN npm ci -w apps/web
 COPY apps/web apps/web
-# NEXT_PUBLIC_* values are inlined into the browser bundle at build time. They come from
-# apps/web/.env.local; set NEXT_PUBLIC_API_URL in .env.production to override that file.
-ARG NEXT_PUBLIC_API_URL=
-RUN if [ -z "$NEXT_PUBLIC_API_URL" ]; then unset NEXT_PUBLIC_API_URL; fi; npm run build -w apps/web
+# NEXT_PUBLIC_* values are inlined into the browser bundle at build time, so the API address
+# must be supplied here (docker-compose.prod.yml passes it from .env.production).
+ARG NEXT_PUBLIC_API_URL
+RUN test -n "$NEXT_PUBLIC_API_URL" || (echo "ERROR: NEXT_PUBLIC_API_URL build argument is required" >&2; exit 1)
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+RUN npm run build -w apps/web
 
 FROM node:22-bookworm-slim AS runtime
 WORKDIR /app

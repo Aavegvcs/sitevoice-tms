@@ -1,37 +1,52 @@
-# Production stack for a single host (e.g. an AWS EC2 instance). No reverse proxy: the web app
-# is published on WEB_PORT and the API on API_PORT, so open both ports in the security group.
-#   cp .env.production.example .env.production   # then fill it in
+# Production stack for a single Ubuntu server. No reverse proxy: the web app is published on
+# WEB_PORT and the API on API_PORT, so open both in the firewall (ufw / cloud security group).
+#
+#   cp .env.production.example .env.production      # fill it in, see the comments inside
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#   docker compose -f docker-compose.prod.yml --env-file .env.production --profile setup run --rm seed
+#
+# The last command runs once: it creates the four roles and one Admin user (SEED_ADMIN_EMAIL).
+# Update later with `git pull` then the same `up -d --build` command; migrations run on start.
+name: sitevoice
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16
     restart: unless-stopped
+    logging: *logging
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.production}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env.production}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   api:
+    image: sitevoice-api:latest
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     restart: unless-stopped
+    logging: *logging
     environment:
       NODE_ENV: production
       PORT: 4000
-      WEB_ORIGIN: ${WEB_ORIGIN}
+      WEB_ORIGIN: ${WEB_ORIGIN:?set WEB_ORIGIN in .env.production}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
-      SEED_PASSWORD: ${SEED_PASSWORD}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env.production (32+ random characters)}
       UPLOAD_DIR: /app/apps/api/uploads
     ports:
       - "${API_PORT:-4000}:4000"
@@ -40,18 +55,51 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      # Migrations run before the server starts, so allow time on first boot and after updates.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   web:
+    image: sitevoice-web:latest
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+        # Baked into the browser bundle at build time, so it must be the address browsers use
+        # to reach the API, e.g. http://203.0.113.10:4000/api. Rebuild after changing it.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.production}
     restart: unless-stopped
+    logging: *logging
     ports:
       - "${WEB_PORT:-3000}:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # One-shot bootstrap, not started by `up`: docker compose ... --profile setup run --rm seed
+  seed:
+    image: sitevoice-api:latest
+    profiles: ["setup"]
+    command: ["npx", "prisma", "db", "seed"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      SEED_MINIMAL: "true"
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:?set SEED_ADMIN_EMAIL in .env.production}
+      SEED_PASSWORD: ${SEED_PASSWORD:?set SEED_PASSWORD in .env.production}
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:
