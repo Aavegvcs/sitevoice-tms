@@ -69,10 +69,12 @@ function Shell({ children }: { children: ReactNode }) {
           {admin.some((n) => n.show) && <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">Administration</p>}
           {admin.map(link)}
         </nav>
-        <div className="mt-auto border-t border-slate-200 p-4">
-          <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
-          <p className="truncate text-xs text-slate-500">{user.role}</p>
-          <button onClick={logout} className="mt-3 text-sm font-medium text-blue-600 hover:underline">
+        <div className="mt-auto border-t border-slate-200 p-5">
+          <div className="mb-4">
+            <p className="truncate text-sm font-medium text-slate-900">{user.name}</p>
+            <p className="truncate text-xs text-slate-500">{user.role}</p>
+          </div>
+          <button onClick={logout} className="text-sm font-medium text-slate-500 hover:text-slate-900">
             Sign out
           </button>
         </div>
