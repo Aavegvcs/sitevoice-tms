@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import {
   Alert,
   Button,
@@ -64,10 +64,34 @@ function Progress({ ticket }: { ticket: TicketDetail }) {
   const visited = new Set<TicketStatus>(["PENDING"]);
   ticket.logs.forEach((l) => l.toStatus && visited.add(l.toStatus));
   return (
-    <ol
-      className="flex flex-wrap items-center gap-2"
-      aria-label="Ticket progress"
-    >
+    <>
+      {/* Phones: a compact segmented bar instead of a wrapping row of labels. */}
+      <div className="sm:hidden">
+        <div className="flex gap-1" aria-hidden>
+          {STATUSES.map((s) => (
+            <span
+              key={s}
+              className={`h-1.5 flex-1 rounded-full ${
+                ticket.status === s
+                  ? STATUS_META[s].bar
+                  : visited.has(s)
+                    ? "bg-slate-300"
+                    : "bg-slate-100"
+              }`}
+            />
+          ))}
+        </div>
+        <p className="mt-2 text-sm text-slate-500">
+          Step {STATUSES.indexOf(ticket.status) + 1} of {STATUSES.length} ·{" "}
+          <span className="font-medium text-slate-900">
+            {STATUS_META[ticket.status].label}
+          </span>
+        </p>
+      </div>
+      <ol
+        className="hidden flex-wrap items-center gap-2 sm:flex"
+        aria-label="Ticket progress"
+      >
       {STATUSES.map((s, i) => {
         const current = ticket.status === s;
         const done = !current && visited.has(s);
@@ -95,7 +119,8 @@ function Progress({ ticket }: { ticket: TicketDetail }) {
           </li>
         );
       })}
-    </ol>
+      </ol>
+    </>
   );
 }
 
@@ -109,7 +134,7 @@ function Attachments({
 }) {
   if (!items.length) return null;
   return (
-    <Card className="p-5">
+    <Card className="p-4 sm:p-5">
       <h2 className="mb-3 font-semibold text-slate-900">Attachments</h2>
       <ul className="grid gap-3 sm:grid-cols-2">
         {items.map((a) => {
@@ -202,11 +227,11 @@ const DOT: Record<TicketLog["action"], string> = {
 
 function Timeline({ logs }: { logs: TicketLog[] }) {
   return (
-    <Card className="p-6">
-      <h2 className="mb-6 font-semibold text-slate-900">Activity</h2>
+    <Card className="p-4 sm:p-6">
+      <h2 className="mb-5 font-semibold text-slate-900 sm:mb-6">Activity</h2>
       <ol className="relative ml-2 space-y-6 border-l border-slate-200">
         {logs.map((l) => (
-          <li key={l.id} className="relative pl-6">
+          <li key={l.id} className="relative min-w-0 pl-6">
             <span
               className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-white ${DOT[l.action]}`}
             />
@@ -222,7 +247,7 @@ function Timeline({ logs }: { logs: TicketLog[] }) {
               <p className="text-sm text-slate-600">{describe(l)}</p>
               {l.note && (
                 <div
-                  className={`mt-2 whitespace-pre-wrap rounded-md px-3 py-2 text-sm ${l.internal ? "bg-slate-100 text-slate-700" : "bg-slate-50 border border-slate-100 text-slate-700"}`}
+                  className={`mt-2 whitespace-pre-wrap break-words rounded-md px-3 py-2 text-sm ${l.internal ? "bg-slate-100 text-slate-700" : "bg-slate-50 border border-slate-100 text-slate-700"}`}
                 >
                   {l.note}
                 </div>
@@ -239,24 +264,64 @@ function Timeline({ logs }: { logs: TicketLog[] }) {
 }
 
 // ------------------------------------------------------------------ actions
+const DESKTOP = "(min-width: 1024px)";
+function useIsDesktop() {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia(DESKTOP);
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia(DESKTOP).matches,
+    () => true,
+  );
+}
+
+/** Always open on desktop; below lg it collapses into an accordion row so the actions stay short. */
 function ActionBox({
   title,
   hint,
   children,
+  defaultOpen = false,
 }: {
   title: string;
   hint?: string;
   children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const desktop = useIsDesktop();
+  const [open, setOpen] = useState(defaultOpen);
+  const bodyId = useId();
+  const expanded = desktop || open;
   return (
-    <div className="space-y-3 border-b border-slate-100 py-4 first:pt-0 last:border-0 last:pb-0">
-      <div>
-        <h3 className="text-sm font-medium text-slate-900">{title}</h3>
-        {hint && (
-          <p className="mt-1 text-xs text-slate-500 leading-relaxed">{hint}</p>
+    <div className="border-b border-slate-100 py-3 first:pt-0 last:border-0 last:pb-0 lg:py-4">
+      <h3 className="text-sm font-medium text-slate-900">
+        {desktop ? (
+          title
+        ) : (
+          <button
+            type="button"
+            aria-expanded={open}
+            aria-controls={bodyId}
+            onClick={() => setOpen((o) => !o)}
+            className="-my-1 flex min-h-10 w-full items-center justify-between gap-3 py-1 text-left"
+          >
+            {title}
+            <span
+              aria-hidden
+              className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+            >
+              ▾
+            </span>
+          </button>
         )}
+      </h3>
+      <div id={bodyId} hidden={!expanded} className="mt-2 space-y-3 lg:mt-3">
+        {hint && (
+          <p className="text-xs leading-relaxed text-slate-500">{hint}</p>
+        )}
+        <div className="space-y-2">{children}</div>
       </div>
-      <div className="space-y-2">{children}</div>
     </div>
   );
 }
@@ -359,7 +424,7 @@ function ConfirmationPanel({ ticket }: { ticket: TicketDetail }) {
 
   if (!ticket.allowed.confirmCompletion) {
     return (
-      <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 px-5 py-4 text-sm text-violet-900">
+      <div className="mb-5 rounded-lg border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-900 sm:px-5">
         <p className="font-semibold">
           Waiting for {ticket.raisedBy.name} to confirm completion
         </p>
@@ -376,7 +441,7 @@ function ConfirmationPanel({ ticket }: { ticket: TicketDetail }) {
 
   return (
     <section
-      className="mb-5 rounded-lg border border-violet-200 bg-violet-50 p-5"
+      className="mb-5 rounded-lg border border-violet-200 bg-violet-50 p-4 sm:p-5"
       aria-labelledby="confirm-title"
     >
       <h2 id="confirm-title" className="font-semibold text-violet-900">
@@ -393,7 +458,7 @@ function ConfirmationPanel({ ticket }: { ticket: TicketDetail }) {
           {request.note}
         </p>
       )}
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row">
         <Button onClick={() => setMode("confirm")}>Confirm completion</Button>
         <Button variant="secondary" onClick={() => setMode("reject")}>
           Not resolved
@@ -468,6 +533,7 @@ function CompleteBox({ ticket }: { ticket: TicketDetail }) {
     <ActionBox
       title="Close this ticket"
       hint="Mark it as completed once you are satisfied with the work."
+      defaultOpen
     >
       <Button className="w-full" onClick={() => setOpen(true)}>
         Mark as completed
@@ -742,15 +808,15 @@ export default function TicketDetailPage() {
     <div className="mx-auto max-w-6xl">
       <Link
         href="/tickets"
-        className="text-sm font-medium text-slate-500 hover:text-slate-900"
+        className="-ml-1 inline-block py-1 pr-2 text-sm font-medium text-slate-500 hover:text-slate-900"
       >
         ← Back to tickets
       </Link>
 
-      <div className="mt-6 mb-8 space-y-4">
+      <div className="mt-3 mb-6 space-y-3 sm:mt-6 sm:mb-8 sm:space-y-4">
         <div>
           <p className="font-mono text-sm text-slate-500">{t.refNo}</p>
-          <h1 className="mt-1 text-2xl font-semibold text-slate-900">
+          <h1 className="mt-1 break-words text-xl font-semibold text-slate-900 sm:text-2xl">
             {t.title}
           </h1>
         </div>
@@ -759,33 +825,44 @@ export default function TicketDetailPage() {
           <PriorityBadge priority={t.priority} />
           <TypeBadge type={t.type} />
         </div>
-        <div className="pt-2">
+        <div className="sm:pt-2">
           <Progress ticket={t} />
         </div>
       </div>
 
       {t.status === "AWAITING_CONFIRMATION" && <ConfirmationPanel ticket={t} />}
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
-        <div className="min-w-0 space-y-5">
-          <Card className="p-4">
+      {/*
+        Two columns on desktop. Below lg the column wrappers use `contents` so
+        every card becomes a flex item and `order-*` can put the details and
+        actions ahead of the long activity log.
+      */}
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[1fr_20rem]">
+        <div className="contents lg:block lg:min-w-0 lg:space-y-5">
+          <Card className="order-1 min-w-0 p-4">
             <h2 className="mb-2 text-sm font-medium text-slate-500">
               Description
             </h2>
-            <p className="whitespace-pre-wrap text-sm text-slate-900">
+            <p className="whitespace-pre-wrap break-words text-sm text-slate-900">
               {t.description}
             </p>
           </Card>
-          <Attachments ticketId={t.id} items={t.attachments} />
-          <Timeline logs={t.logs} />
+          {t.attachments.length > 0 && (
+            <div className="order-4 min-w-0">
+              <Attachments ticketId={t.id} items={t.attachments} />
+            </div>
+          )}
+          <div className="order-5 min-w-0">
+            <Timeline logs={t.logs} />
+          </div>
         </div>
 
-        <div className="space-y-5">
-          <Card className="p-5">
+        <div className="contents lg:block lg:space-y-5">
+          <Card className="order-2 p-4 sm:p-5">
             <h2 className="mb-4 text-xs font-semibold tracking-wider text-slate-500 uppercase">
               DETAILS
             </h2>
-            <dl className="space-y-4 text-sm">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm lg:grid-cols-1">
               <div>
                 <dt className="text-xs text-slate-500">Site</dt>
                 <dd className="mt-0.5 font-medium text-slate-900">
@@ -804,7 +881,7 @@ export default function TicketDetailPage() {
                   {fmtDateTime(t.createdAt)}
                 </dd>
               </div>
-              <div>
+              <div className="col-span-2 lg:col-span-1">
                 <dt className="text-xs text-slate-500">Acknowledged</dt>
                 <dd className="mt-0.5 font-medium text-slate-900">
                   {t.acknowledgedAt && t.acknowledgedBy
@@ -813,7 +890,7 @@ export default function TicketDetailPage() {
                 </dd>
               </div>
               {t.completedAt && (
-                <div>
+                <div className="col-span-2 lg:col-span-1">
                   <dt className="text-xs text-slate-500">Completed on</dt>
                   <dd className="mt-0.5 font-medium text-slate-900">
                     {fmtDateTime(t.completedAt)}
@@ -824,12 +901,13 @@ export default function TicketDetailPage() {
           </Card>
 
           {hasActions && (
-            <Card className="space-y-4 p-5">
+            <Card className="order-3 space-y-2 p-4 sm:p-5 lg:space-y-4">
               <h2 className="font-semibold text-slate-900">Actions</h2>
               {a.acknowledge && (
                 <ActionBox
                   title="Acknowledge"
                   hint="Let the client know the ticket has been seen."
+                  defaultOpen
                 >
                   {ack.error && <Alert>{errorMessage(ack.error)}</Alert>}
                   <Button

@@ -85,7 +85,25 @@ export default function SitesPage() {
         {error && <p className="p-4 text-sm text-red-600">{errorMessage(error)}</p>}
         {data && data.length === 0 && <EmptyState title="No sites yet" hint="Add your first site." />}
         {data && data.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+            <ul className="divide-y divide-slate-100 lg:hidden">
+              {data.map((s) => (
+                <li key={s.id} className="flex items-start justify-between gap-3 px-4 py-3.5">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{s.name}</p>
+                    <p className="mt-0.5 text-sm text-slate-600">
+                      <span className="font-mono text-xs text-slate-500">{s.code}</span>
+                      {s.location && <span> · {s.location}</span>}
+                    </p>
+                    <span className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${s.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>{s.isActive ? 'Active' : 'Inactive'}</span>
+                  </div>
+                  <Button variant="secondary" onClick={() => setEditing(s)} aria-label={`Edit ${s.name}`}>
+                    Edit
+                  </Button>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[560px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -114,7 +132,8 @@ export default function SitesPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
       {editing && <SiteForm site={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} />}

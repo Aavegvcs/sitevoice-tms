@@ -68,9 +68,9 @@ function TicketsInner() {
       />
 
       <Card>
-        <div className="grid gap-3 border-b border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Input placeholder="Search reference or title" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search" className="lg:col-span-2" />
-          <Select value={status} onChange={reset(setStatus)} aria-label="Filter by status">
+        <div className="grid grid-cols-2 gap-2.5 border-b border-slate-200 p-4 sm:gap-3 lg:grid-cols-5">
+          <Input placeholder="Search reference or title" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search" className="col-span-2 lg:col-span-2" />
+          <Select value={status} onChange={reset(setStatus)} aria-label="Filter by status" className="max-sm:pl-2.5 max-sm:pr-6">
             <option value="">All statuses</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -78,7 +78,7 @@ function TicketsInner() {
               </option>
             ))}
           </Select>
-          <Select value={priority} onChange={reset(setPriority)} aria-label="Filter by priority">
+          <Select value={priority} onChange={reset(setPriority)} aria-label="Filter by priority" className="max-sm:pl-2.5 max-sm:pr-6">
             <option value="">All priorities</option>
             {PRIORITIES.map((p) => (
               <option key={p} value={p}>
@@ -86,7 +86,7 @@ function TicketsInner() {
               </option>
             ))}
           </Select>
-          <Select value={type} onChange={reset(setType)} aria-label="Filter by type">
+          <Select value={type} onChange={reset(setType)} aria-label="Filter by type" className="max-sm:pl-2.5 max-sm:pr-6">
             <option value="">All types</option>
             {TYPES.map((t) => (
               <option key={t} value={t}>
@@ -95,7 +95,7 @@ function TicketsInner() {
             ))}
           </Select>
           {(sites.data?.length ?? 0) > 1 && (
-            <Select value={siteId} onChange={reset(setSiteId)} aria-label="Filter by site" className="lg:col-span-2">
+            <Select value={siteId} onChange={reset(setSiteId)} aria-label="Filter by site" className="max-sm:pl-2.5 max-sm:pr-6 lg:col-span-2">
               <option value="">All sites</option>
               {sites.data!.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -115,7 +115,43 @@ function TicketsInner() {
           />
         )}
         {data && data.items.length > 0 && (
-          <div className={`overflow-x-auto ${isFetching ? 'opacity-60' : ''}`}>
+          <div className={isFetching ? 'opacity-60' : ''}>
+            <ul className="divide-y divide-slate-100 lg:hidden">
+              {data.items.map((t) => (
+                <li key={t.id}>
+                  <Link href={`/tickets/${t.id}`} className="block space-y-2 px-4 py-3.5 active:bg-slate-50">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs text-slate-500">{t.refNo}</span>
+                      <StatusBadge status={t.status} />
+                    </div>
+                    <p className="font-medium leading-snug text-slate-900">{t.title}</p>
+                    <p className="text-sm text-slate-600">
+                      {t.site.name}
+                      <span className="text-slate-300"> · </span>
+                      {t.raisedBy.name}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <PriorityBadge priority={t.priority} />
+                      <TypeBadge type={t.type} />
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      {t.acknowledgedAt ? (
+                        <span className="inline-flex items-center gap-1 text-green-700">
+                          <span aria-hidden>✓</span> Acknowledged
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-slate-400">
+                          <span aria-hidden>–</span> Not acknowledged
+                        </span>
+                      )}
+                      <span className="text-slate-400">Updated {fmtDate(t.updatedAt)}</span>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[920px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -166,6 +202,7 @@ function TicketsInner() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
         {data && data.total > 0 && <Pagination page={page} pageSize={PAGE_SIZE} total={data.total} onPage={setPage} />}

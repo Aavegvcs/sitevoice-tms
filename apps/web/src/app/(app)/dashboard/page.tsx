@@ -59,12 +59,12 @@ export default function DashboardPage() {
                 {awaiting.map((t) => (
                   <li key={t.id}>
                     <Link href={`/tickets/${t.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-violet-50/60">
-                      <span className="w-28 font-mono text-xs text-slate-500">{t.refNo}</span>
-                      <span className="min-w-0 flex-1 truncate font-medium text-slate-900">{t.title}</span>
-                      <span className="text-xs text-slate-500">
+                      <span className="order-1 font-mono text-xs text-slate-500 sm:order-none sm:w-28">{t.refNo}</span>
+                      <span className="order-3 w-full min-w-0 font-medium text-slate-900 sm:order-none sm:w-auto sm:flex-1 sm:truncate">{t.title}</span>
+                      <span className="order-4 text-xs text-slate-500 sm:order-none">
                         {t.requestedBy ? `Marked done by ${t.requestedBy}` : 'Marked done'} · {fmtDateTime(t.requestedAt)}
                       </span>
-                      <span className="text-sm font-medium text-violet-700">Review →</span>
+                      <span className="order-2 ml-auto text-sm font-medium text-violet-700 sm:order-none sm:ml-0">Review →</span>
                     </Link>
                   </li>
                 ))}
@@ -114,7 +114,32 @@ export default function DashboardPage() {
             {data.bySite.length === 0 ? (
               <EmptyState title="No tickets yet" />
             ) : (
-              <div className="overflow-x-auto">
+              <>
+                <ul className="divide-y divide-slate-100 lg:hidden">
+                  {data.bySite.map((r) => (
+                    <li key={r.site.id} className="px-4 py-3.5">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <Link href={`/tickets?siteId=${r.site.id}`} className="min-w-0 font-medium text-blue-700 hover:underline">
+                          {r.site.name}
+                          <span className="ml-2 text-xs font-normal text-slate-400">{r.site.code}</span>
+                        </Link>
+                        <span className="shrink-0 text-sm text-slate-500">
+                          <span className="font-semibold text-slate-900">{r.total}</span> total
+                        </span>
+                      </div>
+                      <dl className="mt-3 flex flex-wrap gap-1.5">
+                        {STATUSES.map((s) => (
+                          <div key={s} className="inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2.5 py-1 text-xs">
+                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_META[s].dot}`} />
+                            <dt className="text-slate-500">{STATUS_META[s].label}</dt>
+                            <dd className="font-semibold text-slate-900">{r.byStatus[s]}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden overflow-x-auto lg:block">
                 <table className="w-full min-w-[640px] text-sm">
                   <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                     <tr>
@@ -146,7 +171,8 @@ export default function DashboardPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </Card>
 
@@ -161,12 +187,16 @@ export default function DashboardPage() {
               {data.recent.map((t) => (
                 <li key={t.id}>
                   <Link href={`/tickets/${t.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 hover:bg-slate-50">
-                    <span className="w-28 font-mono text-xs text-slate-500">{t.refNo}</span>
-                    <span className="min-w-0 flex-1 truncate font-medium text-slate-900">{t.title}</span>
-                    <span className="text-xs text-slate-500">{t.site.name}</span>
-                    <PriorityBadge priority={t.priority} />
-                    <StatusBadge status={t.status} />
-                    <span className="w-36 text-right text-xs text-slate-400">{fmtDateTime(t.updatedAt)}</span>
+                    <span className="order-1 font-mono text-xs text-slate-500 sm:order-none sm:w-28">{t.refNo}</span>
+                    <span className="order-3 w-full min-w-0 font-medium text-slate-900 sm:order-none sm:w-auto sm:flex-1 sm:truncate">{t.title}</span>
+                    <span className="order-4 text-xs text-slate-500 sm:order-none">{t.site.name}</span>
+                    <span className="order-5 sm:order-none">
+                      <PriorityBadge priority={t.priority} />
+                    </span>
+                    <span className="order-2 ml-auto sm:order-none sm:ml-0">
+                      <StatusBadge status={t.status} />
+                    </span>
+                    <span className="order-6 ml-auto text-xs text-slate-400 sm:order-none sm:ml-0 sm:w-36 sm:text-right">{fmtDateTime(t.updatedAt)}</span>
                   </Link>
                 </li>
               ))}

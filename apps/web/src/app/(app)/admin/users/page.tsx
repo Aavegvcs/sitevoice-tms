@@ -135,7 +135,31 @@ export default function UsersPage() {
         {users.error && <p className="p-4 text-sm text-red-600">{errorMessage(users.error)}</p>}
         {users.data && users.data.length === 0 && <EmptyState title="No users" />}
         {users.data && users.data.length > 0 && (
-          <div className="overflow-x-auto">
+          <>
+            <ul className="divide-y divide-slate-100 lg:hidden">
+              {users.data.map((u) => (
+                <li key={u.id} className="flex items-start justify-between gap-3 px-4 py-3.5">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{u.name}</p>
+                    <p className="break-all text-xs text-slate-500">{u.email}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">{u.role.name}</span>
+                      <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${u.isActive ? 'bg-green-100 text-green-800' : 'bg-slate-200 text-slate-600'}`}>{u.isActive ? 'Active' : 'Inactive'}</span>
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      <span className="font-medium text-slate-600">Sites: </span>
+                      {u.role.name === 'Admin' ? 'All sites' : u.sites.length ? u.sites.map((s) => s.name).join(', ') : '—'}
+                    </p>
+                  </div>
+                  {canManage && (
+                    <Button variant="secondary" onClick={() => setEditing(u)} aria-label={`Edit ${u.name}`}>
+                      Edit
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -171,7 +195,8 @@ export default function UsersPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </Card>
       {editing && roles.data && sites.data && (
