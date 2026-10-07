@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.next
+**/.env
+**/.env.*
+!**/.env.example
+# The web build reads its NEXT_PUBLIC_* values from this file (it is never copied into the final image).
+!apps/web/.env.local
+**/*.log
+**/uploads
+**/tsconfig.tsbuildinfo
+.git
+.claude
+docs

@@ -4,29 +4,18 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { DonutChart } from '@/components/donut-chart';
 import { Card, EmptyState, PageHeader, PriorityBadge, Spinner, StatusBadge } from '@/components/ui';
 import { apiFetch, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useAwaitingConfirmation } from '@/lib/awaiting';
 import { PRIORITIES, PRIORITY_META, STATUSES, STATUS_META, TYPES, TYPE_LABEL } from '@/lib/constants';
 import { fmtDateTime } from '@/lib/format';
-import type { DashboardSummary } from '@/lib/types';
+import type { DashboardSummary, Priority } from '@/lib/types';
 
-function Bars({ rows }: { rows: { label: string; value: number; color: string }[] }) {
-  const max = Math.max(1, ...rows.map((r) => r.value));
-  return (
-    <ul className="space-y-2.5">
-      {rows.map((r) => (
-        <li key={r.label} className="grid grid-cols-[6.5rem_1fr_2rem] items-center gap-3 text-sm">
-          <span className="truncate text-slate-600">{r.label}</span>
-          <span className="h-2.5 rounded-full bg-slate-100">
-            <span className={`block h-2.5 rounded-full ${r.color}`} style={{ width: `${(r.value / max) * 100}%` }} />
-          </span>
-          <span className="text-right font-medium text-slate-900">{r.value}</span>
-        </li>
-      ))}
-    </ul>
-  );
-}
+// Fixed categorical order (validated for colour-blind separation); keyed to TYPES order.
+const TYPE_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7'];
+const PRIORITY_COLORS: Record<Priority, string> = { LOW: '#16a34a', MEDIUM: '#3b82f6', HIGH: '#f97316', CRITICAL: '#b91c1c' };
 
 export default function DashboardPage() {
   const { can, user } = useAuth();
@@ -43,6 +32,8 @@ export default function DashboardPage() {
     enabled: allowed,
   });
 
+  const awaiting = useAwaitingConfirmation().data ?? [];
+
   if (!allowed) return <Spinner />;
   const isClient = user.role === 'Client';
 
@@ -56,6 +47,31 @@ export default function DashboardPage() {
       {error && <p className="text-sm text-red-600">{errorMessage(error)}</p>}
       {data && (
         <div className="space-y-5">
+          {awaiting.length > 0 && (
+            <section className="rounded-lg border border-violet-200 bg-violet-50 p-5" aria-labelledby="awaiting-title">
+              <h2 id="awaiting-title" className="font-semibold text-violet-900">
+                {awaiting.length === 1 ? '1 ticket needs' : `${awaiting.length} tickets need`} your confirmation
+              </h2>
+              <p className="mt-0.5 text-sm text-violet-800">
+                The team has marked this work as done. Open the ticket to confirm it is completed, or tell them it is not resolved.
+              </p>
+              <ul className="mt-3 divide-y divide-violet-100 overflow-hidden rounded-md border border-violet-200 bg-white">
+                {awaiting.map((t) => (
+                  <li key={t.id}>
+                    <Link href={`/tickets/${t.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-violet-50/60">
+                      <span className="w-28 font-mono text-xs text-slate-500">{t.refNo}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium text-slate-900">{t.title}</span>
+                      <span className="text-xs text-slate-500">
+                        {t.requestedBy ? `Marked done by ${t.requestedBy}` : 'Marked done'} · {fmtDateTime(t.requestedAt)}
+                      </span>
+                      <span className="text-sm font-medium text-violet-700">Review →</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
             <Card className="p-4">
               <p className="text-sm text-slate-500">Total tickets</p>
@@ -77,11 +93,17 @@ export default function DashboardPage() {
           <div className="grid gap-5 lg:grid-cols-2">
             <Card className="p-5">
               <h2 className="mb-4 font-semibold text-slate-900">Tickets by type</h2>
-              <Bars rows={TYPES.map((t) => ({ label: TYPE_LABEL[t], value: data.byType[t], color: 'bg-blue-500' }))} />
+              <DonutChart
+                label="Tickets by type"
+                slices={TYPES.map((t, i) => ({ key: t, label: TYPE_LABEL[t], value: data.byType[t], color: TYPE_COLORS[i] }))}
+              />
             </Card>
             <Card className="p-5">
               <h2 className="mb-4 font-semibold text-slate-900">Tickets by priority</h2>
-              <Bars rows={PRIORITIES.map((p) => ({ label: PRIORITY_META[p].label, value: data.byPriority[p], color: PRIORITY_META[p].bar }))} />
+              <DonutChart
+                label="Tickets by priority"
+                slices={PRIORITIES.map((p) => ({ key: p, label: PRIORITY_META[p].label, value: data.byPriority[p], color: PRIORITY_COLORS[p] }))}
+              />
             </Card>
           </div>
 

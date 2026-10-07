@@ -25,6 +25,7 @@ import {
   CreateTicketDto,
   FollowUpDto,
   ListTicketsQuery,
+  RejectCompletionDto,
   UpdateTicketDto,
 } from './tickets.dto';
 import { TicketsService } from './tickets.service';
@@ -52,6 +53,13 @@ export class TicketsController {
     @CurrentAbility() ability: AppAbility,
   ) {
     return this.tickets.create(dto, files, user, ability);
+  }
+
+  // Declared before ':id' so the path is not parsed as a ticket id.
+  @Get('awaiting-confirmation')
+  @RequirePermission('complete', 'Ticket')
+  awaitingConfirmation(@CurrentAbility() ability: AppAbility) {
+    return this.tickets.awaitingConfirmation(ability);
   }
 
   @Get(':id')
@@ -100,6 +108,18 @@ export class TicketsController {
     @CurrentAbility() ability: AppAbility,
   ) {
     return this.tickets.complete(id, dto, user, ability);
+  }
+
+  @Post(':id/reject-completion')
+  @HttpCode(200)
+  @RequirePermission('complete', 'Ticket')
+  rejectCompletion(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RejectCompletionDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentAbility() ability: AppAbility,
+  ) {
+    return this.tickets.rejectCompletion(id, dto, user, ability);
   }
 
   @Post(':id/follow-up')

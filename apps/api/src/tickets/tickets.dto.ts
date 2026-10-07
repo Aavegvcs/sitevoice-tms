@@ -62,6 +62,13 @@ export class CompleteTicketDto {
   note?: string;
 }
 
+export class RejectCompletionDto {
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  reason!: string;
+}
+
 export class FollowUpDto {
   @IsString()
   @MinLength(1)

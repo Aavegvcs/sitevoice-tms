@@ -4,21 +4,24 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
 import { AuthGate, useAuth } from '@/lib/auth';
+import { useAwaitingConfirmation } from '@/lib/awaiting';
 
 interface NavItem {
   href: string;
   label: string;
   show: boolean;
+  badge?: number;
 }
 
 function Shell({ children }: { children: ReactNode }) {
   const { user, can, logout } = useAuth();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const awaiting = useAwaitingConfirmation().data?.length ?? 0;
 
   const main: NavItem[] = [
     { href: '/dashboard', label: 'Dashboard', show: can('read', 'Dashboard') },
-    { href: '/tickets', label: user.role === 'Client' ? 'My tickets' : 'Tickets', show: can('read', 'Ticket') },
+    { href: '/tickets', label: user.role === 'Client' ? 'My tickets' : 'Tickets', show: can('read', 'Ticket'), badge: awaiting },
     { href: '/tickets/new', label: 'Raise a ticket', show: can('create', 'Ticket') },
   ];
   const admin: NavItem[] = [
@@ -35,9 +38,15 @@ function Shell({ children }: { children: ReactNode }) {
         key={n.href}
         href={n.href}
         onClick={() => setOpen(false)}
-        className={`block rounded-md px-3 py-2 text-sm font-medium ${isActive(n.href) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
+        className={`flex items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium ${isActive(n.href) ? 'bg-blue-50 text-blue-700' : 'text-slate-600 hover:bg-slate-100'}`}
       >
         {n.label}
+        {!!n.badge && (
+          <span className="rounded-full bg-violet-600 px-2 py-0.5 text-xs font-semibold text-white" title={`${n.badge} awaiting your confirmation`}>
+            {n.badge}
+            <span className="sr-only"> awaiting your confirmation</span>
+          </span>
+        )}
       </Link>
     );
 

@@ -8,7 +8,7 @@ export const PERMISSION_CATALOG = {
     changeStatus: 'Change the status of a ticket',
     comment: 'Add internal comments and photos (hidden from the client)',
     followUp: 'Follow up on a ticket (visible to everyone on it)',
-    complete: 'Mark a ticket as Completed',
+    complete: 'Confirm completion of a ticket (closes it)',
     viewInternal: 'See internal comments and photos',
   },
   Site: {

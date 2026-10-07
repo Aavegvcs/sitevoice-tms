@@ -1,4 +1,4 @@
-export type TicketStatus = 'PENDING' | 'IN_PROGRESS' | 'ON_HOLD' | 'DISPUTE' | 'COMPLETED';
+export type TicketStatus = 'PENDING' | 'IN_PROGRESS' | 'ON_HOLD' | 'AWAITING_CONFIRMATION' | 'COMPLETED';
 export type TicketType = 'QUALITY' | 'RECOVERY' | 'LABOUR' | 'PRODUCTIVITY' | 'PLANNING' | 'SAFETY' | 'OTHERS';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type PermissionScope = 'ALL' | 'SITES' | 'OWN';
@@ -92,11 +92,23 @@ export interface TicketDetail {
     acknowledge: boolean;
     changeStatus: boolean;
     complete: boolean;
+    confirmCompletion: boolean;
     comment: boolean;
     followUp: boolean;
     attach: boolean;
     viewInternal: boolean;
   };
+}
+
+/** A ticket staff have marked as done, waiting for the client to confirm. */
+export interface AwaitingTicket {
+  id: string;
+  refNo: string;
+  title: string;
+  site: SiteLite;
+  requestedAt: string;
+  requestedBy: string | null;
+  note: string | null;
 }
 
 export interface DashboardSummary {

@@ -21,6 +21,7 @@ import {
   CreateTicketDto,
   FollowUpDto,
   ListTicketsQuery,
+  RejectCompletionDto,
   UpdateTicketDto,
 } from './tickets.dto';
 import { INLINE_TYPES, UPLOAD_DIR, decodeName, removeFiles } from './uploads';
@@ -48,7 +49,7 @@ const detailInclude = {
 } satisfies Prisma.TicketInclude;
 
 // Statuses that need an explanation, shown to the client in the log.
-const NEEDS_REASON: TicketStatus[] = ['ON_HOLD', 'DISPUTE'];
+const NEEDS_REASON: TicketStatus[] = ['ON_HOLD'];
 
 @Injectable()
 export class TicketsService {
@@ -129,6 +130,8 @@ export class TicketsService {
         acknowledge: this.can(ability, 'acknowledge', ticket) && !ticket.acknowledgedAt,
         changeStatus: this.can(ability, 'changeStatus', ticket),
         complete: this.can(ability, 'complete', ticket) && ticket.status !== 'COMPLETED',
+        // The client is being asked to confirm work that staff have marked as done.
+        confirmCompletion: this.can(ability, 'complete', ticket) && ticket.status === 'AWAITING_CONFIRMATION',
         comment: this.can(ability, 'comment', ticket),
         followUp: this.can(ability, 'followUp', ticket),
         attach: this.can(ability, 'comment', ticket) || this.can(ability, 'followUp', ticket),
@@ -230,6 +233,11 @@ export class TicketsService {
   async changeStatus(id: string, dto: ChangeStatusDto, user: AuthUser, ability: AppAbility) {
     const ticket = await this.loadVisible(id, ability);
     this.require(ability, 'changeStatus', ticket);
+    if (dto.status === 'COMPLETED') {
+      throw new BadRequestException(
+        'A ticket is completed only when the client confirms it. Set it to Awaiting confirmation instead',
+      );
+    }
     return this.applyStatus(ticket, dto.status, dto.note, user);
   }
 
@@ -238,6 +246,50 @@ export class TicketsService {
     const ticket = await this.loadVisible(id, ability);
     this.require(ability, 'complete', ticket);
     return this.applyStatus(ticket, 'COMPLETED', dto.note, user);
+  }
+
+  /** The client is not satisfied with work marked as done: it goes back to In Progress with their reason. */
+  async rejectCompletion(id: string, dto: RejectCompletionDto, user: AuthUser, ability: AppAbility) {
+    const ticket = await this.loadVisible(id, ability);
+    this.require(ability, 'complete', ticket);
+    if (ticket.status !== 'AWAITING_CONFIRMATION') {
+      throw new BadRequestException('This ticket is not waiting for your confirmation');
+    }
+    return this.applyStatus(ticket, 'IN_PROGRESS', dto.reason, user);
+  }
+
+  /** Tickets marked as done that this user is the one to confirm (a client's own tickets). */
+  async awaitingConfirmation(ability: AppAbility) {
+    const tickets = await this.prisma.ticket.findMany({
+      where: {
+        AND: [
+          this.visibleWhere(ability),
+          (accessibleBy(ability as any, 'complete') as any).ofType('Ticket'),
+          { status: 'AWAITING_CONFIRMATION' },
+        ],
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: 20,
+      select: {
+        id: true,
+        refNo: true,
+        title: true,
+        updatedAt: true,
+        site: { select: { id: true, code: true, name: true } },
+        logs: {
+          where: { action: 'STATUS_CHANGED', toStatus: 'AWAITING_CONFIRMATION' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { createdAt: true, note: true, actor: { select: { name: true } } },
+        },
+      },
+    });
+    return tickets.map(({ logs, ...t }) => ({
+      ...t,
+      requestedAt: logs[0]?.createdAt ?? t.updatedAt,
+      requestedBy: logs[0]?.actor.name ?? null,
+      note: logs[0]?.note ?? null,
+    }));
   }
 
   async followUp(id: string, dto: FollowUpDto, user: AuthUser, ability: AppAbility) {

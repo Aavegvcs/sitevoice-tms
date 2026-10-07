@@ -35,6 +35,8 @@ const SYSTEM_ROLES: { name: string; description: string; rules: Rule[] }[] = [
     rules: [
       { action: 'read', subject: 'Ticket', scope: 'SITES' },
       { action: 'acknowledge', subject: 'Ticket', scope: 'SITES' },
+      // Moves work along; "done" becomes Awaiting confirmation until the client confirms.
+      { action: 'changeStatus', subject: 'Ticket', scope: 'SITES' },
       { action: 'comment', subject: 'Ticket', scope: 'SITES' },
       { action: 'viewInternal', subject: 'Ticket', scope: 'SITES' },
       { action: 'read', subject: 'Site' },
@@ -141,7 +143,7 @@ async function main() {
       { title: 'Steel delivery delayed by three days', description: 'Reinforcement steel promised for Monday has not arrived.', type: 'PLANNING', priority: 'CRITICAL', status: 'PENDING', site: 'SITE-A', by: client },
       { title: 'Safety railing missing on the terrace', description: 'No guard rail along the open edge of the terrace slab.', type: 'SAFETY', priority: 'CRITICAL', status: 'ON_HOLD', site: 'SITE-A', by: client, acknowledged: true },
       { title: 'Labour shortage on the night shift', description: 'Only half the agreed workforce turned up this week.', type: 'LABOUR', priority: 'MEDIUM', status: 'COMPLETED', site: 'SITE-A', by: client, acknowledged: true },
-      { title: 'Pier cap alignment out of tolerance', description: 'Pier cap P4 is 20 mm off the drawing.', type: 'QUALITY', priority: 'HIGH', status: 'DISPUTE', site: 'SITE-B', by: client2, acknowledged: true },
+      { title: 'Pier cap alignment out of tolerance', description: 'Pier cap P4 is 20 mm off the drawing.', type: 'QUALITY', priority: 'HIGH', status: 'ON_HOLD', site: 'SITE-B', by: client2, acknowledged: true },
       { title: 'Slow progress on deck slab casting', description: 'Casting is two weeks behind the agreed schedule.', type: 'PRODUCTIVITY', priority: 'LOW', status: 'PENDING', site: 'SITE-B', by: client2 },
     ];
 
@@ -167,7 +169,7 @@ async function main() {
       ];
       if (d.acknowledged) logs.push({ actorId: d.site === 'SITE-A' ? sup : mgr, action: 'ACKNOWLEDGED' });
       if (d.status !== 'PENDING') {
-        logs.push({ actorId: mgr, action: 'STATUS_CHANGED', toStatus: d.status, note: d.status === 'ON_HOLD' || d.status === 'DISPUTE' ? 'Waiting for a decision' : undefined });
+        logs.push({ actorId: mgr, action: 'STATUS_CHANGED', toStatus: d.status, note: d.status === 'ON_HOLD' ? 'Waiting for a decision' : undefined });
       }
       if (d.internal) logs.push({ actorId: sup, action: 'COMMENT', note: d.internal, internal: true });
       await prisma.ticketLog.createMany({ data: logs.map((l) => ({ ...l, ticketId: t.id })) });
