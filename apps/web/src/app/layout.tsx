@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SiteVoice",
+  title: "Arwade",
   description: "Site ticket management system",
 };
 

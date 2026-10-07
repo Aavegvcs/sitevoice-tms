@@ -48,8 +48,9 @@ export default function LoginPage() {
         className="w-full max-w-sm space-y-5 rounded-xl border border-slate-200 bg-white p-7 shadow-sm"
       >
         <div>
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-lg font-bold text-white">S</div>
-          <h1 className="text-xl font-semibold text-slate-900">SiteVoice</h1>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Arwade" className="mb-3 h-12 w-auto" />
+          <h1 className="sr-only">Arwade</h1>
           <p className="text-sm text-slate-500">Sign in to raise and track tickets.</p>
         </div>
 

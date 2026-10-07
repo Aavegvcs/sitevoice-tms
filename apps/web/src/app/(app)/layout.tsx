@@ -53,7 +53,8 @@ function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 md:hidden">
-        <span className="font-semibold text-slate-900">SiteVoice</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo.png" alt="Arwade" className="h-8 w-auto" />
         <button onClick={() => setOpen((o) => !o)} aria-label="Toggle menu" className="rounded border border-slate-300 px-2.5 py-1 text-sm">
           {open ? 'Close' : 'Menu'}
         </button>
@@ -61,8 +62,8 @@ function Shell({ children }: { children: ReactNode }) {
 
       <aside className={`${open ? 'block' : 'hidden'} w-full shrink-0 border-r border-slate-200 bg-white md:sticky md:top-0 md:flex md:h-screen md:w-60 md:flex-col md:self-start md:overflow-y-auto`}>
         <div className="hidden items-center gap-2 px-5 py-5 md:flex">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">S</div>
-          <span className="text-lg font-semibold text-slate-900">SiteVoice</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Arwade" className="h-10 w-auto" />
         </div>
         <nav className="space-y-1 px-3 py-2">
           {main.map(link)}
