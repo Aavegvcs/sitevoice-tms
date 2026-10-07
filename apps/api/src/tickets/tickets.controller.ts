@@ -29,9 +29,9 @@ import {
   UpdateTicketDto,
 } from './tickets.dto';
 import { TicketsService } from './tickets.service';
-import { CleanupUploadsOnError, MAX_FILES, uploadOptions } from './uploads';
+import { MAX_FILES, uploadOptions } from './uploads';
 
-const uploads = () => [FilesInterceptor('files', MAX_FILES, uploadOptions), CleanupUploadsOnError];
+const uploads = () => [FilesInterceptor('files', MAX_FILES, uploadOptions)];
 
 @Controller('tickets')
 export class TicketsController {
