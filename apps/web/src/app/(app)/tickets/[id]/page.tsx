@@ -31,21 +31,23 @@ function Progress({ ticket }: { ticket: TicketDetail }) {
   const visited = new Set<TicketStatus>(['PENDING']);
   ticket.logs.forEach((l) => l.toStatus && visited.add(l.toStatus));
   return (
-    <ol className="flex flex-wrap gap-2" aria-label="Ticket progress">
-      {STATUSES.map((s) => {
+    <ol className="flex flex-wrap items-center gap-2" aria-label="Ticket progress">
+      {STATUSES.map((s, i) => {
         const current = ticket.status === s;
         const done = !current && visited.has(s);
         return (
-          <li
-            key={s}
-            aria-current={current ? 'step' : undefined}
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${
-              current ? `${STATUS_META[s].badge} border-transparent ring-2 ring-offset-1 ring-slate-300` : done ? 'border-slate-300 bg-white text-slate-700' : 'border-slate-200 bg-slate-50 text-slate-400'
-            }`}
-          >
-            <span className={`h-2 w-2 rounded-full ${current || done ? STATUS_META[s].dot : 'bg-slate-300'}`} />
-            {STATUS_META[s].label}
-            {done && <span className="sr-only"> (reached earlier)</span>}
+          <li key={s} className="flex items-center gap-2">
+            {i > 0 && <span className="text-slate-300">→</span>}
+            <span
+              aria-current={current ? 'step' : undefined}
+              className={`flex items-center gap-1.5 text-sm font-medium ${
+                current ? 'text-slate-900' : done ? 'text-slate-600' : 'text-slate-400'
+              }`}
+            >
+              {current && <span className={`h-2 w-2 rounded-full ${STATUS_META[s].dot}`} />}
+              {STATUS_META[s].label}
+              {done && <span className="sr-only"> (reached earlier)</span>}
+            </span>
           </li>
         );
       })}
@@ -94,7 +96,7 @@ function Attachments({ ticketId, items }: { ticketId: string; items: Attachment[
 function describe(l: TicketLog) {
   switch (l.action) {
     case 'STATUS_CHANGED':
-      return `Status changed${l.fromStatus ? ` from ${STATUS_META[l.fromStatus].label}` : ''} to ${l.toStatus ? STATUS_META[l.toStatus].label : ''}`;
+      return `Status changed${l.fromStatus ? ` from ${STATUS_META[l.fromStatus].label.toLowerCase()}` : ''} to ${l.toStatus ? STATUS_META[l.toStatus].label.toLowerCase() : ''}`;
     case 'CREATED':
       return 'Raised the ticket';
     case 'ACKNOWLEDGED':
@@ -105,6 +107,8 @@ function describe(l: TicketLog) {
       return 'Added an internal comment';
     case 'ATTACHMENT_ADDED':
       return 'Added files';
+    case 'DETAILS_UPDATED':
+      return 'Updated ticket details';
     default:
       return LOG_LABEL[l.action];
   }
@@ -122,21 +126,27 @@ const DOT: Record<TicketLog['action'], string> = {
 
 function Timeline({ logs }: { logs: TicketLog[] }) {
   return (
-    <Card className="p-5">
-      <h2 className="mb-4 font-semibold text-slate-900">Activity log</h2>
-      <ol className="space-y-5">
+    <Card className="p-6">
+      <h2 className="mb-6 font-semibold text-slate-900">Activity</h2>
+      <ol className="relative ml-2 space-y-6 border-l border-slate-200">
         {logs.map((l) => (
           <li key={l.id} className="relative pl-6">
-            <span className={`absolute left-0 top-1.5 h-2.5 w-2.5 rounded-full ${DOT[l.action]}`} />
-            <p className="text-sm text-slate-900">
-              <span className="font-medium">{l.actor.name}</span>
-              <span className="text-slate-500"> ({l.actor.role.name})</span> {describe(l).toLowerCase().replace(/^./, (c) => c)}
-              {l.internal && <span className="ml-2 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">Internal</span>}
-            </p>
-            {l.note && (
-              <p className={`mt-1 whitespace-pre-wrap rounded-md px-3 py-2 text-sm ${l.internal ? 'bg-slate-100 text-slate-700' : 'bg-blue-50 text-slate-700'}`}>{l.note}</p>
-            )}
-            <p className="mt-1 text-xs text-slate-400">{fmtDateTime(l.createdAt)}</p>
+            <span className={`absolute -left-[5px] top-1.5 h-2.5 w-2.5 rounded-full ring-4 ring-white ${DOT[l.action]}`} />
+            <div className="flex flex-col">
+              <p className="text-sm text-slate-900">
+                <span className="font-medium">{l.actor.name}</span>
+                {l.internal && <span className="ml-2 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">Internal</span>}
+              </p>
+              <p className="text-sm text-slate-600">
+                {describe(l)}
+              </p>
+              {l.note && (
+                <div className={`mt-2 whitespace-pre-wrap rounded-md px-3 py-2 text-sm ${l.internal ? 'bg-slate-100 text-slate-700' : 'bg-slate-50 border border-slate-100 text-slate-700'}`}>
+                  {l.note}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-slate-400">{fmtDateTime(l.createdAt)}</p>
+            </div>
           </li>
         ))}
       </ol>
@@ -147,10 +157,14 @@ function Timeline({ logs }: { logs: TicketLog[] }) {
 // ------------------------------------------------------------------ actions
 function ActionBox({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2 border-t border-slate-100 pt-4 first:border-0 first:pt-0">
-      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
-      {hint && <p className="text-xs text-slate-500">{hint}</p>}
-      {children}
+    <div className="space-y-3 border-b border-slate-100 py-4 first:pt-0 last:border-0 last:pb-0">
+      <div>
+        <h3 className="text-sm font-medium text-slate-900">{title}</h3>
+        {hint && <p className="mt-1 text-xs text-slate-500 leading-relaxed">{hint}</p>}
+      </div>
+      <div className="space-y-2">
+        {children}
+      </div>
     </div>
   );
 }
@@ -363,30 +377,30 @@ export default function TicketDetailPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <Link href="/tickets" className="text-sm font-medium text-blue-600 hover:underline">
+      <Link href="/tickets" className="text-sm font-medium text-slate-500 hover:text-slate-900">
         ← Back to tickets
       </Link>
 
-      <div className="mt-3 mb-5">
-        <p className="font-mono text-xs text-slate-500">{t.refNo}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold text-slate-900">{t.title}</h1>
+      <div className="mt-6 mb-8 space-y-4">
+        <div>
+          <p className="font-mono text-sm text-slate-500">{t.refNo}</p>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-900">{t.title}</h1>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={t.status} />
           <PriorityBadge priority={t.priority} />
           <TypeBadge type={t.type} />
         </div>
-        <div className="mt-4">
+        <div className="pt-2">
           <Progress ticket={t} />
         </div>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
         <div className="min-w-0 space-y-5">
-          <Card className="p-5">
-            <h2 className="mb-2 font-semibold text-slate-900">Description</h2>
-            <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{t.description}</p>
+          <Card className="p-4">
+            <h2 className="mb-2 text-sm font-medium text-slate-500">Description</h2>
+            <p className="whitespace-pre-wrap text-sm text-slate-900">{t.description}</p>
           </Card>
           <Attachments ticketId={t.id} items={t.attachments} />
           <Timeline logs={t.logs} />
@@ -394,56 +408,58 @@ export default function TicketDetailPage() {
 
         <div className="space-y-5">
           <Card className="p-5">
-            <h2 className="mb-3 font-semibold text-slate-900">Details</h2>
-            <dl className="space-y-3 text-sm">
+            <h2 className="mb-4 text-xs font-semibold tracking-wider text-slate-500 uppercase">DETAILS</h2>
+            <dl className="space-y-4 text-sm">
               <div>
                 <dt className="text-xs text-slate-500">Site</dt>
-                <dd className="text-slate-900">{t.site.name}</dd>
+                <dd className="mt-0.5 font-medium text-slate-900">{t.site.name}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Raised by</dt>
-                <dd className="text-slate-900">{t.raisedBy.name}</dd>
+                <dd className="mt-0.5 font-medium text-slate-900">{t.raisedBy.name}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Raised on</dt>
-                <dd className="text-slate-900">{fmtDateTime(t.createdAt)}</dd>
+                <dd className="mt-0.5 font-medium text-slate-900">{fmtDateTime(t.createdAt)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Acknowledged</dt>
-                <dd className="text-slate-900">{t.acknowledgedAt && t.acknowledgedBy ? `${t.acknowledgedBy.name} · ${fmtDateTime(t.acknowledgedAt)}` : 'Not yet'}</dd>
+                <dd className="mt-0.5 font-medium text-slate-900">{t.acknowledgedAt && t.acknowledgedBy ? `${t.acknowledgedBy.name} · ${fmtDateTime(t.acknowledgedAt)}` : 'Not yet'}</dd>
               </div>
               {t.completedAt && (
                 <div>
                   <dt className="text-xs text-slate-500">Completed on</dt>
-                  <dd className="text-slate-900">{fmtDateTime(t.completedAt)}</dd>
+                  <dd className="mt-0.5 font-medium text-slate-900">{fmtDateTime(t.completedAt)}</dd>
                 </div>
               )}
             </dl>
           </Card>
 
           {hasActions && (
-            <Card className="space-y-4 p-5">
-              <h2 className="font-semibold text-slate-900">Actions</h2>
-              {a.acknowledge && (
-                <ActionBox title="Acknowledge" hint="Let the client know the ticket has been seen.">
-                  {ack.error && <Alert>{errorMessage(ack.error)}</Alert>}
-                  <Button className="w-full" loading={ack.isPending} onClick={() => ack.mutate(undefined)}>
-                    Acknowledge ticket
-                  </Button>
-                </ActionBox>
-              )}
-              {a.complete && <CompleteBox ticket={t} />}
-              {a.followUp && <MessageBox ticket={t} kind="followUp" />}
-              {a.changeStatus && <StatusChanger ticket={t} />}
-              {a.comment && <MessageBox ticket={t} kind="comment" />}
-              {a.attach && <UploadBox ticket={t} />}
-              {a.update && (
-                <ActionBox title="Ticket details">
-                  <Button className="w-full" variant="secondary" onClick={() => setEditing(true)}>
-                    Edit details or priority
-                  </Button>
-                </ActionBox>
-              )}
+            <Card className="p-5">
+              <h2 className="mb-4 text-xs font-semibold tracking-wider text-slate-500 uppercase">ACTIONS</h2>
+              <div className="flex flex-col">
+                {a.acknowledge && (
+                  <ActionBox title="Acknowledge" hint="Let the client know the ticket has been seen.">
+                    {ack.error && <Alert>{errorMessage(ack.error)}</Alert>}
+                    <Button className="w-full" loading={ack.isPending} onClick={() => ack.mutate(undefined)}>
+                      Acknowledge ticket
+                    </Button>
+                  </ActionBox>
+                )}
+                {a.complete && <CompleteBox ticket={t} />}
+                {a.followUp && <MessageBox ticket={t} kind="followUp" />}
+                {a.changeStatus && <StatusChanger ticket={t} />}
+                {a.comment && <MessageBox ticket={t} kind="comment" />}
+                {a.attach && <UploadBox ticket={t} />}
+                {a.update && (
+                  <ActionBox title="Ticket details">
+                    <Button className="w-full" variant="secondary" onClick={() => setEditing(true)}>
+                      Edit details or priority
+                    </Button>
+                  </ActionBox>
+                )}
+              </div>
             </Card>
           )}
         </div>
